@@ -1,0 +1,3 @@
+[submodule "AndroidUtils"]
+	path = AndroidUtils
+	url = https://github.com/AviMarineInnovations/AndroidUtils.git
