@@ -1,6 +1,7 @@
 package `in`.avimarine.pic2do
 
 import android.content.Context
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -9,6 +10,7 @@ import android.widget.ImageView
 import com.bumptech.glide.Glide
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.storage.ktx.storage
+import `in`.avimarine.androidutils.TAG
 
 internal class GridAdapter(
     private val todoList: List<GridImage>,
@@ -29,7 +31,7 @@ internal class GridAdapter(
 
     // below function is use to return item id of grid view.
     override fun getItemId(position: Int): Long {
-        return 0
+        return position.toLong()
     }
 
     // in below function we are getting individual item of grid view.
@@ -43,10 +45,10 @@ internal class GridAdapter(
             newView = layoutInflater!!.inflate(R.layout.image_grid_item, null)
         }
         gridImage = newView!!.findViewById(R.id.gridImage)
-
+        Log.d(TAG, "Attempting to download item: ${todoList[position].imageUrl}")
         val storageRef = Firebase.storage.reference.child(todoList[position].imageUrl)
 
-        Glide.with(context).load(storageRef).into(gridImage)
+        Glide.with(context).load(todoList[position].imageUrl).into(gridImage)
         return newView
     }
 }

@@ -1,25 +1,47 @@
 package `in`.avimarine.pic2do
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.view.Menu
+import android.view.MenuItem
+import android.webkit.MimeTypeMap
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.navigateUp
 import androidx.navigation.ui.setupActionBarWithNavController
-import android.view.Menu
-import android.view.MenuItem
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageReference
 import `in`.avimarine.androidutils.TAG
 import `in`.avimarine.pic2do.databinding.ActivityMainBinding
+import com.google.firebase.storage.ktx.component1
+import com.google.firebase.storage.ktx.component2
+import com.google.firebase.storage.ktx.storage
+import java.io.File
+
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var appBarConfiguration: AppBarConfiguration
     private lateinit var binding: ActivityMainBinding
-
+    private val getContent = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            uploadToFirebase(uri)
+        } else {
+            Toast.makeText(this, "No Image Selected", Toast.LENGTH_SHORT)
+                .show()
+        }
+    }
+    private val storageReference = FirebaseStorage.getInstance().reference
 
     override fun onCreate(savedInstanceState: Bundle?) {
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -35,10 +57,9 @@ class MainActivity : AppCompatActivity() {
         setupActionBarWithNavController(navController, appBarConfiguration)
 
         binding.fab.setOnClickListener { view ->
-            addImage("")
+//            addImage("")
+            takeImage()
         }
-
-
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -63,9 +84,13 @@ class MainActivity : AppCompatActivity() {
                 || super.onSupportNavigateUp()
     }
 
-    fun addImage(url: String) {
+    private fun addImage(url: String) {
+        getContent.launch("image/*")
+    }
+
+    private fun uploadToFirestore(uri: Uri, caption:String) {
         val db = Firebase.firestore
-        val image = GridImage("Amit", "istockphoto-1145618475-170667a.jpg")
+        val image = GridImage("caption", uri.toString())
         db.collection("todo")
             .add(image)
             .addOnSuccessListener { documentReference ->
@@ -74,5 +99,67 @@ class MainActivity : AppCompatActivity() {
             .addOnFailureListener { e ->
                 Log.w(TAG, "Error adding document", e)
             }
+    }
+
+    private fun uploadToFirebase(uri: Uri) {
+        val imageReference: StorageReference = storageReference.child(
+            System.currentTimeMillis().toString() + "." + getFileExtension(uri)
+        )
+        imageReference.putFile(uri).addOnSuccessListener {
+            imageReference.downloadUrl.addOnSuccessListener { uri ->
+                uploadToFirestore(uri, "")
+                Toast.makeText(this, "Uploaded", Toast.LENGTH_SHORT).show()
+            }
+        }.addOnProgressListener { (bytesTransferred, totalByteCount) ->
+            val progress = (100.0 * bytesTransferred) / totalByteCount
+            Log.d(TAG, "Upload is $progress% done")
+        }.addOnPausedListener {
+            Log.d(TAG, "Upload is paused")
+        }.addOnFailureListener {
+            Toast.makeText(this, "Failed", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun getFileExtension(fileUri: Uri): String? {
+        val contentResolver = contentResolver
+        val mime = MimeTypeMap.getSingleton()
+        return mime.getExtensionFromMimeType(contentResolver.getType(fileUri))
+    }
+
+
+    private val takeImageResult = registerForActivityResult(ActivityResultContracts.TakePicture()) { isSuccess ->
+        if (isSuccess) {
+            latestTmpUri?.let { uri ->
+                uploadToFirebase(uri)
+            }
+        }
+    }
+
+    private val selectImageFromGalleryResult = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let { uploadToFirebase(uri) }
+    }
+
+    private var latestTmpUri: Uri? = null
+
+
+
+    private fun takeImage() {
+        lifecycleScope.launchWhenStarted {
+            getTmpFileUri().let { uri ->
+                latestTmpUri = uri
+                takeImageResult.launch(uri)
+            }
+        }
+    }
+
+    private fun selectImageFromGallery() = selectImageFromGalleryResult.launch("image/*")
+
+    private fun getTmpFileUri(): Uri {
+        val tmpFile = File.createTempFile("tmp_image_file", ".png", cacheDir).apply {
+            createNewFile()
+            deleteOnExit()
+        }
+
+        return FileProvider.getUriForFile(applicationContext, "${BuildConfig.APPLICATION_ID}.provider", tmpFile)
     }
 }

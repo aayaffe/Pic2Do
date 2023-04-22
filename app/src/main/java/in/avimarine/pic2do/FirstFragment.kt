@@ -37,7 +37,6 @@ class FirstFragment : Fragment() {
             .addOnSuccessListener { result ->
                 for (document in result) {
                     dataList.add(document.toObject(GridImage::class.java))
-
                 }
                 gridAdapter.notifyDataSetChanged()
             }
